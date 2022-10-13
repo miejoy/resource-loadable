@@ -20,8 +20,8 @@ ResourceLoadable 是自定义 RSV(Resource & State & View) 设计模式中 Resou
 ### 该模块包含如下内容:
 
 - 定义了如下基础协议:
-  - ResourceLoadable: 可被加载的资源，如 文件、网络接口等
-  - ResourceHandleable: 可处理资源的资源处理器
+  - LoadableResource: 可被加载的资源，如 文件、网络接口等
+  - ResourceLoader: 资源加载器
 
 ## 安装
 
@@ -37,7 +37,7 @@ dependencies: [
 
 ## 使用
 
-### ResourceLoadable 使用
+### LoadableResource 使用
 
 1、定义一个资源
 
@@ -45,17 +45,17 @@ dependencies: [
 import ResourceLoadable
 
 /// 可以通过定义二级协议来简化 handler 的处理
-protocol FileResourceLoadable: ResourceLoadable where ExtraData == Void {
+protocol LoadableFileResource: LoadableResource where ExtraData == Void {
     var fileName: String { get }
 }
 
 /// 扩展默认资源类型
-extension FileResourceLoadable {
+extension LoadableFileResource {
     static var category: ResourceCategory { .file }
 }
 
 /// 定义一个文件资源
-struct FileResource: FileResourceLoadable {
+struct FileResource: LoadableFileResource {
     typealias Response = String
     var fileName: String
 }
@@ -79,18 +79,18 @@ let cancellable = fileResource.open().sink { completion in
 cancellable.cancel()
 ```
 
-### ResourceHandleable 使用
+### ResourceLoader 使用
 
 1、定义一个资源处理器
 
 ```swift
 import ResourceLoadable
 
-class FileHandler: ResourceHandleable {
+class FileResourceLoader: ResourceLoader {
     static var handlerCategorys: Set<ResourceCategory> = [.file]
         
-    func load<Resource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> where Resource : ResourceLoadable {
-        guard let theResource = resource as? FileResourceLoadable else {
+    func load<Resource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> where Resource : LoadableResource {
+        guard let theResource = resource as? LoadableFileResource else {
             let publisher = PassthroughSubject<Resource.Response, Error>()
             publisher.send(completion: .failure(LoadResourceError.resourceTypeError))
             return publisher.eraseToAnyPublisher()
@@ -105,8 +105,8 @@ class FileHandler: ResourceHandleable {
 ```swift
 import ResourceLoadable
 
-let fileHandler = FileHandler()
-ResourceManager.shared.registerHandler(fileHandler)
+let fileHandler = FileResourceLoader()
+ResourceCenter.shared.registerLoader(fileHandler)
 ```
 
 ## 作者

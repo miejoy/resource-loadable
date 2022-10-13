@@ -8,6 +8,7 @@
 
 import Foundation
 
+/// 资源列表
 public enum ResourceCategory: Hashable {
     case unknown
     case file

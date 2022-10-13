@@ -10,22 +10,22 @@ import Foundation
 import ResourceLoadable
 import Combine
 
-protocol WebResourceLoadable: ResourceLoadable {
+protocol LoadableWebResource: LoadableResource {
     static var action: String { get }
 }
 
-extension WebResourceLoadable {
+extension LoadableWebResource {
     static var category: ResourceCategory { .web }
 }
 
-class WebResourceHandler: ResourceHandleable {
+class WebResourceLoader: ResourceLoader {
     
-    static var handlerCategorys: Set<ResourceCategory> = [.web]
+    static var categories: Set<ResourceCategory> = [.web]
     
     func load<Resource>(
         _ resource: Resource,
         with extraData: Resource.ExtraData
-    ) -> AnyPublisher<Resource.Response, Error> where Resource : ResourceLoadable {
+    ) -> AnyPublisher<Resource.Response, Error> where Resource : LoadableResource {
         let publisher = PassthroughSubject<Resource.Response, Error>()
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
             let data = "{\"name\":\"test\"}".data(using: .utf8)!

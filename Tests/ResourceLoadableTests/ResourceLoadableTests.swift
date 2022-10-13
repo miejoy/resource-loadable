@@ -13,10 +13,10 @@ import XCTest
 class ResourceLoadableTests: XCTestCase {
     
     func testOpenResource() {
-        ResourceManager.shared.registerHandlerMap = [:]
+        ResourceCenter.shared.registerLoaderMap = [:]
         
-        let fileHandler = FileHandler()
-        ResourceManager.shared.registerHandler(fileHandler)
+        let fileHandler = FileResourceLoader()
+        ResourceCenter.shared.registerLoader(fileHandler)
         
         let fileName = "test"
         let fileResource = FileResource(fileName: fileName)
@@ -47,10 +47,10 @@ class ResourceLoadableTests: XCTestCase {
     }
     
     func testOpenResourceOnce() {
-        ResourceManager.shared.registerHandlerMap = [:]
+        ResourceCenter.shared.registerLoaderMap = [:]
         
-        let fileHandler = FileHandler()
-        ResourceManager.shared.registerHandler(fileHandler)
+        let fileHandler = FileResourceLoader()
+        ResourceCenter.shared.registerLoader(fileHandler)
         
         let fileName = "test"
         let fileResource = FileResource(fileName: fileName)
@@ -69,10 +69,10 @@ class ResourceLoadableTests: XCTestCase {
     }
     
     func testNoResponseWhenOpenResourceOnce() {
-        ResourceManager.shared.registerHandlerMap = [:]
+        ResourceCenter.shared.registerLoaderMap = [:]
         
-        let fileHandler = FilePassthroughHandler()
-        ResourceManager.shared.registerHandler(fileHandler)
+        let fileHandler = FilePassthroughLoader()
+        ResourceCenter.shared.registerLoader(fileHandler)
         
         let fileName = "test"
         let fileResource = FileResource(fileName: fileName)
@@ -104,12 +104,12 @@ class ResourceLoadableTests: XCTestCase {
     }
     
     func testErrorNoHandlerWhenOpenResourceOnce() {
-        ResourceManager.shared.registerHandlerMap = [:]
+        ResourceCenter.shared.registerLoaderMap = [:]
         ResourceMonitor.shared.arrObservers = []
         class Oberver: ResourceMonitorOberver {
             var noHandlerErrorCall = false
             func receiveResourceEvent(_ event: ResourceEvent) {
-                if case .noHandlerFoundForResource = event {
+                if case .noLoaderFoundForResource = event {
                     noHandlerErrorCall = true
                 }
             }
@@ -137,7 +137,7 @@ class ResourceLoadableTests: XCTestCase {
         XCTAssertNil(resposeStr)
         XCTAssert(oberver.noHandlerErrorCall)
         if let error = resposeError as? LoadResourceError,
-           case .noHandlerForResource = error {
+           case .noLoaderForResource = error {
         } else {
             XCTFail("no error response")
         }
@@ -147,7 +147,7 @@ class ResourceLoadableTests: XCTestCase {
     }
     
     func testDuplicateRegistration() {
-        ResourceManager.shared.registerHandlerMap = [:]
+        ResourceCenter.shared.registerLoaderMap = [:]
         ResourceMonitor.shared.arrObservers = []
         class Oberver: ResourceMonitorOberver {
             var duplicateRegistrationCall = false
@@ -159,11 +159,11 @@ class ResourceLoadableTests: XCTestCase {
         }
         let oberver = Oberver()
         let cancellable = ResourceMonitor.shared.addObserver(oberver)
-        let fileHandler = FileHandler()
-        ResourceManager.shared.registerHandler(fileHandler)
+        let fileHandler = FileResourceLoader()
+        ResourceCenter.shared.registerLoader(fileHandler)
         XCTAssert(!oberver.duplicateRegistrationCall)
         
-        ResourceManager.shared.registerHandler(fileHandler)
+        ResourceCenter.shared.registerLoader(fileHandler)
         XCTAssert(oberver.duplicateRegistrationCall)
         
         cancellable.cancel()
@@ -171,10 +171,10 @@ class ResourceLoadableTests: XCTestCase {
     
     @available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
     func testOpenResourceOnceAsync() async throws {
-        ResourceManager.shared.registerHandlerMap = [:]
+        ResourceCenter.shared.registerLoaderMap = [:]
         
-        let fileHandler = FileHandler()
-        ResourceManager.shared.registerHandler(fileHandler)
+        let fileHandler = FileResourceLoader()
+        ResourceCenter.shared.registerLoader(fileHandler)
         
         let fileName = "test"
         let fileResource = FileResource(fileName: fileName)

@@ -11,9 +11,9 @@ import Combine
 
 /// 存储器变化事件
 public enum ResourceEvent {
-    case addResourceHander(any ResourceHandleable, ResourceCategory)
-    case noHandlerFoundForResource(ResourceCategory)
-    case duplicateRegistration(_ old: any ResourceHandleable, _ new: any ResourceHandleable)
+    case addResourceLoader(any ResourceLoader, ResourceCategory)
+    case noLoaderFoundForResource(ResourceCategory)
+    case duplicateRegistration(_ old: any ResourceLoader, _ new: any ResourceLoader)
 }
 
 /// 存储器变化观察者

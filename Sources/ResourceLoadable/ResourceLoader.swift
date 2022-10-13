@@ -1,5 +1,5 @@
 //
-//  ResourceHandleable.swift
+//  ResourceLoader.swift
 //  
 //
 //  Created by 黄磊 on 2022/6/17.
@@ -9,11 +9,14 @@
 import Foundation
 import Combine
 
-public protocol ResourceHandleable: AnyObject {
+/// 资源加载者
+public protocol ResourceLoader: AnyObject {
     
-    static var handlerCategorys: Set<ResourceCategory> { get }
-        
-    func load<Resource: ResourceLoadable>(
+    /// 支持的资源类别列表
+    static var categories: Set<ResourceCategory> { get }
+    
+    /// 加载对应资源
+    func load<Resource: LoadableResource>(
         _ resource: Resource,
         with extraData: Resource.ExtraData
     ) -> AnyPublisher<Resource.Response, Error>

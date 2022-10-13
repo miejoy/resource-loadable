@@ -9,28 +9,28 @@
 import ResourceLoadable
 import Combine
 
-protocol FileResourceLoadable: ResourceLoadable where ExtraData == Void {
+protocol LoadableFileResource: LoadableResource where ExtraData == Void {
     var fileName: String { get }
 }
 
 
-extension FileResourceLoadable {
+extension LoadableFileResource {
     static var category: ResourceCategory { .file }
 }
 
-struct FileResource: FileResourceLoadable {
+struct FileResource: LoadableFileResource {
     
     typealias Response = String
     
     var fileName: String
 }
 
-class FileHandler: ResourceHandleable {
-    static var handlerCategorys: Set<ResourceCategory> = [.file]
+class FileResourceLoader: ResourceLoader {
+    static var categories: Set<ResourceCategory> = [.file]
     
     let publisher = CurrentValueSubject<String, Error>("")
     
-    func load<Resource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> where Resource : ResourceLoadable {
+    func load<Resource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> where Resource : LoadableResource {
         let thePublisher = publisher as! CurrentValueSubject<Resource.Response, Error>
         if let fileRes = resource as? FileResource {
             publisher.send(fileRes.fileName)
@@ -39,12 +39,12 @@ class FileHandler: ResourceHandleable {
     }
 }
 
-class FilePassthroughHandler: ResourceHandleable {
-    static var handlerCategorys: Set<ResourceCategory> = [.file]
+class FilePassthroughLoader: ResourceLoader {
+    static var categories: Set<ResourceCategory> = [.file]
     
     let publisher = PassthroughSubject<String, Error>()
     
-    func load<Resource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> where Resource : ResourceLoadable {
+    func load<Resource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> where Resource : LoadableResource {
         let thePublisher = publisher as! PassthroughSubject<Resource.Response, Error>
         return thePublisher.eraseToAnyPublisher()
     }

@@ -1,5 +1,5 @@
 //
-//  ResourceLoadable.swift
+//  LoadableResource.swift
 //  
 //
 //  Created by 黄磊 on 2022/6/17.
@@ -9,7 +9,8 @@
 import Foundation
 import Combine
 
-public protocol ResourceLoadable: Encodable {
+/// 可加载的资源
+public protocol LoadableResource: Encodable {
     /// 资源类别
     static var category: ResourceCategory { get }
     /// 传入的额外数据格式，可以为 Void
@@ -21,10 +22,10 @@ public protocol ResourceLoadable: Encodable {
     func open(with extraData: ExtraData) -> AnyPublisher<Response, Error>
 }
 
-extension ResourceLoadable {
+extension LoadableResource {
     /// 默认打开资源方法
     public func open(with extraData: ExtraData) -> AnyPublisher<Response, Error> {
-        ResourceManager.shared.load(self, with: extraData)
+        ResourceCenter.shared.load(self, with: extraData)
     }
     
     /// 提供只打开读取一次的方法
@@ -49,7 +50,7 @@ extension ResourceLoadable {
     }
 }
 
-extension ResourceLoadable where ExtraData == Void {
+extension LoadableResource where ExtraData == Void {
     public func open() -> AnyPublisher<Response, Error> {
         open(with: Void())
     }
@@ -60,7 +61,7 @@ extension ResourceLoadable where ExtraData == Void {
 }
 
 @available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
-extension ResourceLoadable {
+extension LoadableResource {
     public func openOnce(_ extraData: ExtraData) async throws -> Response {
         try await withCheckedThrowingContinuation { continuation in
             self.openOnce(extraData) { result in
@@ -71,7 +72,7 @@ extension ResourceLoadable {
 }
 
 @available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
-extension ResourceLoadable where ExtraData == Void {
+extension LoadableResource where ExtraData == Void {
     public func openOnce() async throws -> Response {
         try await self.openOnce(Void())
     }
