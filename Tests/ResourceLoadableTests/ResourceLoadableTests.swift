@@ -68,6 +68,31 @@ class ResourceLoadableTests: XCTestCase {
         XCTAssertEqual(response, fileName)
     }
     
+    func testOpenResourceOnceWithFuture() {
+        ResourceCenter.shared.registerLoaderMap = [:]
+        
+        let fileHandler = FileResourceLoader()
+        ResourceCenter.shared.registerLoader(fileHandler)
+        
+        let fileName = "test"
+        let fileResource = FileResource(fileName: fileName)
+        
+        var response : String = ""
+        var isCompletion = false
+        let cancellable = fileResource.openOnce().sink { completion in
+            if case .failure(_) = completion {
+                XCTFail("completion with error")
+            }
+            isCompletion = true
+        } receiveValue: { data in
+            response = data
+        }
+
+        XCTAssert(isCompletion)
+        XCTAssertEqual(response, fileName)
+        cancellable.cancel()
+    }
+    
     func testNoResponseWhenOpenResourceOnce() {
         ResourceCenter.shared.registerLoaderMap = [:]
         

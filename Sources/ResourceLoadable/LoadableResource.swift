@@ -29,30 +29,24 @@ extension LoadableResource {
     }
     
     /// 提供只打开读取一次的方法
+    public func openOnce(_ extraData: ExtraData) -> Future<Response, Error> {
+        open(with: extraData).asFuture()
+    }
+    
+    /// 提供只打开读取一次的方法
     public func openOnce(_ extraData: ExtraData, callback: @escaping (Result<Response, Error>) -> Void) {
-        var cancellable: AnyCancellable? = nil
-        var didReceiveValue = false
-        cancellable = open(with: extraData).sink { completion in
-            switch completion {
-            case .finished:
-                if !didReceiveValue {
-                    callback(.failure(LoadResourceError.noValueReceiveWhenCompletion))
-                }
-                break
-            case .failure(let error):
-                callback(.failure(error))
-            }
-        } receiveValue: { data in
-            callback(.success(data))
-            didReceiveValue = true
-            cancellable?.cancel()
-        }
+        open(with: extraData).receiveOnce(with: callback)
     }
 }
 
 extension LoadableResource where ExtraData == Void {
     public func open() -> AnyPublisher<Response, Error> {
         open(with: Void())
+    }
+    
+    /// 提供只打开读取一次的方法
+    public func openOnce() -> Future<Response, Error> {
+        openOnce(Void())
     }
     
     public func openOnce(callback: @escaping (Result<Response, Error>) -> Void) {
