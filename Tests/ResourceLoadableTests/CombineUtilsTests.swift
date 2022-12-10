@@ -189,4 +189,59 @@ class CombineUtilsTests: XCTestCase {
             XCTFail("Error not match")
         }
     }
+    
+    func testWatchData() {
+        let testStr = "test"
+        var receiveValue = false
+        var isCompletion = false
+        var watchList: [String] = []
+        let publish = PassthroughSubject<String, Error>()
+        
+        let cancellable = publish.watch { str in
+            watchList.append(str)
+        }
+        .sink { completion in
+            isCompletion = true
+        } receiveValue: { _ in
+            receiveValue = true
+        }
+
+        XCTAssertFalse(receiveValue)
+        XCTAssertFalse(isCompletion)
+        XCTAssertEqual(watchList, [])
+        
+        publish.send(testStr)
+        
+        XCTAssertTrue(receiveValue)
+        XCTAssertFalse(isCompletion)
+        XCTAssertEqual(watchList, [testStr])
+        
+        publish.send(testStr)
+        XCTAssertFalse(isCompletion)
+        XCTAssertEqual(watchList, [testStr, testStr])
+        
+        cancellable.cancel()
+        XCTAssertFalse(isCompletion)
+        XCTAssertEqual(watchList, [testStr, testStr])
+        
+        publish.send(testStr)
+        XCTAssertFalse(isCompletion)
+        XCTAssertEqual(watchList, [testStr, testStr])
+    }
+    
+    @available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
+    func testWaitFutureValue() async throws {
+        let testStr = "test"
+        let publish = PassthroughSubject<String, Error>()
+        
+        Task {
+            publish.send(testStr)
+        }
+        
+        let future = publish.asFuture()
+        
+        let output = try await future.wait()
+        
+        XCTAssertEqual(output, testStr)
+    }
 }

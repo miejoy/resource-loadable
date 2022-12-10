@@ -56,4 +56,24 @@ extension Publisher {
             cancellable = nil
         }
     }
+    
+    /// 观察其中数据
+    public func watch(with block: @escaping (Output) -> Void) -> Publishers.Map<Self, Output> {
+        self.map { value in
+            block(value)
+            return value
+        }
+    }
+}
+
+@available(macOS 12, iOS 15, watchOS 8, tvOS 15, *)
+extension Future {
+    /// 等待结果
+    public func wait() async throws -> Output {
+        try await withCheckedThrowingContinuation { continuation in
+            self.receiveOnce { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
 }
