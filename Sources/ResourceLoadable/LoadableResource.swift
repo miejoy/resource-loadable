@@ -10,7 +10,7 @@ import Foundation
 import Combine
 
 /// 可加载的资源
-public protocol LoadableResource: Encodable {
+public protocol LoadableResource {
     /// 资源类别
     static var category: ResourceCategory { get }
     /// 传入的额外数据格式，可以为 Void

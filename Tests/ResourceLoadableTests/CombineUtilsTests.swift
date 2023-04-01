@@ -233,15 +233,16 @@ class CombineUtilsTests: XCTestCase {
     func testWaitFutureValue() async throws {
         let testStr = "test"
         let publish = PassthroughSubject<String, Error>()
+                
+        let future = publish.asFuture()
         
         Task {
             publish.send(testStr)
         }
         
-        let future = publish.asFuture()
-        
         let output = try await future.wait()
         
         XCTAssertEqual(output, testStr)
+        publish.send(completion: .finished)
     }
 }
