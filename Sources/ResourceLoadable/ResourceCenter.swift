@@ -74,7 +74,7 @@ public final class ResourceCenter: Sendable {
 extension DispatchQueue {
     private static let resourceQueueKey: DispatchSpecificKey<String> = .init()
     static let resourceQueue: DispatchQueue = {
-        let queue = DispatchQueue(label: "resource-loadable.resource_queue")
+        let queue = DispatchQueue(label: "com.miejoy.resource_queue")
         queue.setSpecific(key: resourceQueueKey, value: queue.label)
         return queue
     }()
