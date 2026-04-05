@@ -13,14 +13,30 @@ import Combine
 ///
 /// 负责管理所有已注册的 `ResourceLoader`，并将资源加载请求路由到对应的加载器。
 /// 通过 `ResourceCenter.shared` 访问全局单例。
-public final class ResourceCenter: @unchecked Sendable {
+public final class ResourceCenter: Sendable {
 
     /// 全局共享单例
     public static let shared = ResourceCenter()
 
-    var registerLoaderMap: [ResourceCategory: any ResourceLoader] = [:]
+    /// 内部存储，所有可变状态集中于此
+    final class Storage: @unchecked Sendable {
+        /// 已注册的加载器映射表
+        var loaderMap: [ResourceCategory: any ResourceLoader] = [:]
+    }
+
+    let storage: Storage = .init()
 
     private init() {}
+
+    // MARK: - 属性（通过 resourceQueue 线程安全访问）
+
+    /// 已注册的加载器映射表
+    var registerLoaderMap: [ResourceCategory: any ResourceLoader] {
+        get { DispatchQueue.syncOnResourceQueue { storage.loaderMap } }
+        set { DispatchQueue.syncOnResourceQueue { storage.loaderMap = newValue } }
+    }
+
+    // MARK: - Public
 
     /// 注册资源加载器
     ///
@@ -29,18 +45,21 @@ public final class ResourceCenter: @unchecked Sendable {
     ///
     /// - Parameter resourceLoader: 待注册的资源加载器
     public func registerLoader<Loader: ResourceLoader>(_ resourceLoader: Loader) {
-        Loader.categories.forEach { category in
-            if let oldResourceLoader = registerLoaderMap[category] {
-                ResourceMonitor.shared.record(event: .duplicateRegistration(oldResourceLoader, resourceLoader))
+        DispatchQueue.syncOnResourceQueue {
+            Loader.categories.forEach { category in
+                if let old = storage.loaderMap[category] {
+                    ResourceMonitor.shared.record(event: .duplicateRegistration(old, resourceLoader))
+                }
+                storage.loaderMap[category] = resourceLoader
+                ResourceMonitor.shared.record(event: .addResourceLoader(resourceLoader, category))
             }
-            registerLoaderMap[category] = resourceLoader
-            ResourceMonitor.shared.record(event: .addResourceLoader(resourceLoader, category))
         }
     }
 
     /// 加载资源（内部方法，由 `LoadableResource.open(with:)` 调用）
     func load<Resource: LoadableResource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> {
-        if let loader = registerLoaderMap[Resource.category] {
+        let loader = DispatchQueue.syncOnResourceQueue { storage.loaderMap[Resource.category] }
+        if let loader {
             return loader.load(resource, with: extraData)
         }
         ResourceMonitor.shared.record(event: .noLoaderFoundForResource(Resource.category))
@@ -49,6 +68,27 @@ public final class ResourceCenter: @unchecked Sendable {
         return publisher.eraseToAnyPublisher()
     }
 }
+
+// MARK: - resourceQueue
+
+extension DispatchQueue {
+    private static let resourceQueueKey: DispatchSpecificKey<String> = .init()
+    static let resourceQueue: DispatchQueue = {
+        let queue = DispatchQueue(label: "resource-loadable.resource_queue")
+        queue.setSpecific(key: resourceQueueKey, value: queue.label)
+        return queue
+    }()
+
+    /// 在 resourceQueue 上同步执行，已在队列上时直接执行避免死锁
+    static func syncOnResourceQueue<T>(execute work: () throws -> T) rethrows -> T {
+        if DispatchQueue.getSpecific(key: resourceQueueKey) == resourceQueue.label {
+            return try work()
+        }
+        return try resourceQueue.sync(execute: work)
+    }
+}
+
+// MARK: - LoadResourceError
 
 /// 资源加载错误
 public enum LoadResourceError: Error, Sendable {
