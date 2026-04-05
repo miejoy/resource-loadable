@@ -65,7 +65,7 @@ final class FilePassthroughLoader: @unchecked Sendable, ResourceLoader {
 // MARK: - 测试 Observer
 
 /// ResourceMonitor 观察者，强持有以防止弱引用提前释放
-final class TestObserver: ResourceMonitorObserver {
+final class TestObserver: @unchecked Sendable, ResourceMonitorObserver {
     var events: [String] = []
     var addCount = 0
     var noLoaderCount = 0
@@ -76,6 +76,7 @@ final class TestObserver: ResourceMonitorObserver {
         case .addResourceLoader: addCount += 1
         case .noLoaderFoundForResource: noLoaderCount += 1
         case .duplicateRegistration: duplicateCount += 1
+        case .fatalError: break
         }
     }
 }
@@ -84,6 +85,5 @@ final class TestObserver: ResourceMonitorObserver {
 
 func resetResourceCenter(loader: (any ResourceLoader)? = nil) {
     ResourceCenter.shared.registerLoaderMap = [:]
-    ResourceMonitor.shared.arrObservers = []
     if let loader { ResourceCenter.shared.registerLoader(loader) }
 }

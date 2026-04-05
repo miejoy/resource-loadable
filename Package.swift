@@ -16,11 +16,15 @@ let package = Package(
             name: "ResourceLoadable",
             targets: ["ResourceLoadable"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/miejoy/module-monitor.git", branch: "main"),
+    ],
     targets: [
         .target(
             name: "ResourceLoadable",
-            dependencies: []),
+            dependencies: [
+                .product(name: "ModuleMonitor", package: "module-monitor"),
+            ]),
         .testTarget(
             name: "ResourceLoadableTests",
             dependencies: ["ResourceLoadable"]),
