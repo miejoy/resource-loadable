@@ -28,10 +28,8 @@ public final class ResourceCenter: Sendable {
 
     private init() {}
 
-    // MARK: - 属性（通过 resourceQueue 线程安全访问）
-
-    /// 已注册的加载器映射表
-    var registerLoaderMap: [ResourceCategory: any ResourceLoader] {
+    /// 已注册的加载器映射表（通过 resourceQueue 线程安全访问）
+    var loaderMap: [ResourceCategory: any ResourceLoader] {
         get { DispatchQueue.syncOnResourceQueue { storage.loaderMap } }
         set { DispatchQueue.syncOnResourceQueue { storage.loaderMap = newValue } }
     }

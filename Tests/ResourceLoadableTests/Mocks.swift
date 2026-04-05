@@ -84,6 +84,6 @@ final class TestObserver: @unchecked Sendable, ResourceMonitorObserver {
 // MARK: - 测试辅助
 
 func resetResourceCenter(loader: (any ResourceLoader)? = nil) {
-    ResourceCenter.shared.registerLoaderMap = [:]
+    ResourceCenter.shared.loaderMap = [:]
     if let loader { ResourceCenter.shared.registerLoader(loader) }
 }
