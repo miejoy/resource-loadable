@@ -9,6 +9,15 @@ import Testing
 import Combine
 @testable import ResourceLoadable
 
+// MARK: - 测试辅助
+
+/// 用于在 @Sendable 回调中安全捕获结果的包装类
+final class Box<T>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
+}
+
+// MARK: - CombineUtils 测试
 @Suite("CombineUtils")
 struct CombineUtilsTests {
 

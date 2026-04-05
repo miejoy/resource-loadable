@@ -10,6 +10,31 @@ import Testing
 import Combine
 @testable import ResourceLoadable
 
+// MARK: - 测试辅助
+
+/// ResourceMonitor 观察者，强持有以防止弱引用提前释放
+private final class TestObserver: @unchecked Sendable, ResourceMonitorObserver {
+    var addCount = 0
+    var noLoaderCount = 0
+    var duplicateCount = 0
+
+    func receiveResourceEvent(_ event: ResourceEvent) {
+        switch event {
+        case .addResourceLoader: addCount += 1
+        case .noLoaderFoundForResource: noLoaderCount += 1
+        case .duplicateRegistration: duplicateCount += 1
+        case .fatalError: break
+        }
+    }
+}
+
+private func resetResourceCenter(loader: (any ResourceLoader)? = nil) {
+    ResourceCenter.shared.loaderMap = [:]
+    if let loader { ResourceCenter.shared.registerLoader(loader) }
+}
+
+// MARK: - ResourceLoadable 测试
+
 @Suite("ResourceLoadable", .serialized)
 struct ResourceLoadableTests {
 
