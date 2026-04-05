@@ -1,137 +1,244 @@
+//
+//  CombineUtilsTests.swift
+//
+//
+//  Created by 黄磊 on 2022/12/7.
+//
+
 import Testing
 import Combine
 @testable import ResourceLoadable
 
-@Suite("Combine+Utils", .serialized)
+@Suite("CombineUtils")
 struct CombineUtilsTests {
 
-    @Test("asFuture 异步收到值")
-    func asFutureAsync() {
-        let subject = PassthroughSubject<String, Error>()
-        var received: String?
-        var completed = false
-        let cancellable = subject.asFuture().sink { _ in
-            completed = true
-        } receiveValue: { received = $0 }
+    @Test("asFuture 异步成功")
+    func testAsFutureSucceed() {
+        var receiveValue = false
+        var isCompletion = false
+        let testStr = "test"
 
-        #expect(received == nil)
-        subject.send("hello")
-        #expect(received == "hello")
-        #expect(completed)
-        cancellable.cancel()
-    }
-
-    @Test("asFuture 同步收到值（CurrentValueSubject）")
-    func asFutureSync() {
-        let subject = CurrentValueSubject<String, Error>("sync")
-        var received: String?
-        let cancellable = subject.asFuture().sink { _ in } receiveValue: { received = $0 }
-        #expect(received == "sync")
-        cancellable.cancel()
-    }
-
-    @Test("asFuture 收到错误")
-    func asFutureError() {
-        let subject = PassthroughSubject<String, Error>()
-        var error: Error?
-        let cancellable = subject.asFuture().sink { completion in
-            if case .failure(let e) = completion { error = e }
-        } receiveValue: { _ in }
-
-        subject.send(completion: .failure(LoadResourceError.resourceTypeError))
-        if case .resourceTypeError = error as? LoadResourceError {} else {
-            Issue.record("应收到 resourceTypeError")
+        let publish = PassthroughSubject<String, Error>()
+        let cancellable = publish.asFuture().sink { _ in
+            isCompletion = true
+        } receiveValue: { str in
+            #expect(str == testStr)
+            receiveValue = true
         }
+
+        #expect(!receiveValue)
+        #expect(!isCompletion)
+
+        publish.send(testStr)
+
+        #expect(receiveValue)
+        #expect(isCompletion)
+
         cancellable.cancel()
     }
 
-    @Test("asFuture 无值完成时收到 noValueReceiveWhenCompletion")
-    func asFutureNoValue() {
-        let subject = PassthroughSubject<String, Error>()
-        var error: Error?
-        let cancellable = subject.asFuture().sink { completion in
-            if case .failure(let e) = completion { error = e }
-        } receiveValue: { _ in }
+    @Test("asFuture 同步成功（CurrentValueSubject）")
+    func testAsFutureSucceedSync() {
+        var receiveValue = false
+        var isCompletion = false
+        let testStr = "test"
 
-        subject.send(completion: .finished)
-        if case .noValueReceiveWhenCompletion = error as? LoadResourceError {} else {
-            Issue.record("应收到 noValueReceiveWhenCompletion")
+        let publish = CurrentValueSubject<String, Error>(testStr)
+        let cancellable = publish.asFuture().sink { _ in
+            isCompletion = true
+        } receiveValue: { str in
+            #expect(str == testStr)
+            receiveValue = true
         }
+
+        #expect(receiveValue)
+        #expect(isCompletion)
+
         cancellable.cancel()
     }
 
-    @Test("receiveOnce 异步收到值")
-    func receiveOnceAsync() {
-        let subject = PassthroughSubject<String, Error>()
+    @Test("asFuture 失败")
+    func testAsFutureFailed() {
+        var receiveValue = false
+        var isCompletion = false
+        let error: Error = LoadResourceError.resourceTypeError
+        var finishError: Error? = nil
+
+        let publish = PassthroughSubject<String, Error>()
+        let cancellable = publish.asFuture().sink { completion in
+            isCompletion = true
+            if case .failure(let err) = completion {
+                finishError = err
+            }
+        } receiveValue: { _ in
+            receiveValue = true
+        }
+
+        #expect(!receiveValue)
+        #expect(!isCompletion)
+
+        publish.send(completion: .failure(error))
+
+        #expect(!receiveValue)
+        #expect(finishError != nil)
+        if case .resourceTypeError = finishError as? LoadResourceError {} else {
+            Issue.record("Error not match")
+        }
+
+        cancellable.cancel()
+    }
+
+    @Test("asFuture 完成未发值时返回 noValueReceiveWhenCompletion")
+    func testAsFutureFailedNoData() {
+        var receiveValue = false
+        var isCompletion = false
+        var finishError: Error? = nil
+
+        let publish = PassthroughSubject<String, Error>()
+        let cancellable = publish.asFuture().sink { completion in
+            isCompletion = true
+            if case .failure(let err) = completion {
+                finishError = err
+            }
+        } receiveValue: { _ in
+            receiveValue = true
+        }
+
+        #expect(!receiveValue)
+        #expect(!isCompletion)
+
+        publish.send(completion: .finished)
+
+        #expect(!receiveValue)
+        #expect(finishError != nil)
+        if case .noValueReceiveWhenCompletion = finishError as? LoadResourceError {} else {
+            Issue.record("Error not match")
+        }
+
+        cancellable.cancel()
+    }
+
+    @Test("receiveOnce 异步成功")
+    func testReceiveOnceSucceed() {
         let box = Box<String?>(nil)
-        subject.receiveOnce { result in
-            if case .success(let v) = result { box.value = v }
+        let testStr = "test"
+
+        let publish = PassthroughSubject<String, Error>()
+        publish.receiveOnce { result in
+            if case .success(let success) = result {
+                box.value = success
+            }
         }
+
         #expect(box.value == nil)
-        subject.send("once")
-        #expect(box.value == "once")
+
+        publish.send(testStr)
+
+        #expect(box.value == testStr)
     }
 
-    @Test("receiveOnce 同步收到值（CurrentValueSubject）")
-    func receiveOnceSync() {
-        let subject = CurrentValueSubject<String, Error>("sync")
+    @Test("receiveOnce 同步成功（CurrentValueSubject）")
+    func testReceiveOnceSucceedSync() {
         let box = Box<String?>(nil)
-        subject.receiveOnce { result in
-            if case .success(let v) = result { box.value = v }
+        let testStr = "test"
+
+        let publish = CurrentValueSubject<String, Error>(testStr)
+        publish.receiveOnce { result in
+            if case .success(let success) = result {
+                box.value = success
+            }
         }
-        #expect(box.value == "sync")
+
+        #expect(box.value == testStr)
     }
 
-    @Test("receiveOnce 收到错误")
-    func receiveOnceError() {
-        let subject = PassthroughSubject<String, Error>()
+    @Test("receiveOnce 失败")
+    func testReceiveOnceFailed() {
+        let error: Error = LoadResourceError.resourceTypeError
         let box = Box<Error?>(nil)
-        subject.receiveOnce { result in
-            if case .failure(let e) = result { box.value = e }
+
+        let publish = PassthroughSubject<String, Error>()
+        publish.receiveOnce { result in
+            if case .failure(let err) = result {
+                box.value = err
+            }
         }
-        subject.send(completion: .failure(LoadResourceError.resourceTypeError))
+
+        publish.send(completion: .failure(error))
+
         if case .resourceTypeError = box.value as? LoadResourceError {} else {
-            Issue.record("应收到 resourceTypeError")
+            Issue.record("Error not match")
         }
     }
 
-    @Test("receiveOnce 无值完成时收到 noValueReceiveWhenCompletion")
-    func receiveOnceNoValue() {
-        let subject = PassthroughSubject<String, Error>()
+    @Test("receiveOnce 完成未发值时返回 noValueReceiveWhenCompletion")
+    func testReceiveOnceFailedNoData() {
         let box = Box<Error?>(nil)
-        subject.receiveOnce { result in
-            if case .failure(let e) = result { box.value = e }
+
+        let publish = PassthroughSubject<String, Error>()
+        publish.receiveOnce { result in
+            if case .failure(let err) = result {
+                box.value = err
+            }
         }
-        subject.send(completion: .finished)
+
+        publish.send(completion: .finished)
+
         if case .noValueReceiveWhenCompletion = box.value as? LoadResourceError {} else {
-            Issue.record("应收到 noValueReceiveWhenCompletion")
+            Issue.record("Error not match")
         }
     }
 
-    @Test("watch 不中断数据流，取消后不再接收")
-    func watchData() {
-        let subject = PassthroughSubject<String, Error>()
-        var watched: [String] = []
-        var received: [String] = []
-        let cancellable = subject.watch { watched.append($0) }
-            .sink { _ in } receiveValue: { received.append($0) }
+    @Test("watch 不中断数据流")
+    func testWatchData() {
+        let testStr = "test"
+        var receiveValue = false
+        var isCompletion = false
+        var watchList: [String] = []
+        let publish = PassthroughSubject<String, Error>()
 
-        subject.send("a")
-        subject.send("b")
-        #expect(watched == ["a", "b"])
-        #expect(received == ["a", "b"])
+        let cancellable = publish.watch { str in
+            watchList.append(str)
+        }
+        .sink { _ in
+            isCompletion = true
+        } receiveValue: { _ in
+            receiveValue = true
+        }
+
+        #expect(!receiveValue)
+        #expect(!isCompletion)
+        #expect(watchList == [])
+
+        publish.send(testStr)
+
+        #expect(receiveValue)
+        #expect(!isCompletion)
+        #expect(watchList == [testStr])
+
+        publish.send(testStr)
+        #expect(!isCompletion)
+        #expect(watchList == [testStr, testStr])
+
         cancellable.cancel()
+        #expect(!isCompletion)
+        #expect(watchList == [testStr, testStr])
 
-        subject.send("c")
-        #expect(watched == ["a", "b"])
+        publish.send(testStr)
+        #expect(!isCompletion)
+        #expect(watchList == [testStr, testStr])
     }
 
     @Test("Future.wait() async/await 版本")
-    func futureWait() async throws {
-        let subject = PassthroughSubject<String, Error>()
-        let future = subject.asFuture()
-        subject.send("waited")
+    func testWaitFutureValue() async throws {
+        let testStr = "test"
+        let publish = PassthroughSubject<String, Error>()
+        let future = publish.asFuture()
+
+        publish.send(testStr)
+
         let output = try await future.wait()
-        #expect(output == "waited")
+        #expect(output == testStr)
+        publish.send(completion: .finished)
     }
 }
