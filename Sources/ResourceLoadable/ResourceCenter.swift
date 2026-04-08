@@ -78,7 +78,7 @@ extension DispatchQueue {
     }()
 
     /// 在 resourceQueue 上同步执行，已在队列上时直接执行避免死锁
-    static func syncOnResourceQueue<T>(execute work: () throws -> T) rethrows -> T {
+    public static func syncOnResourceQueue<T>(execute work: () throws -> T) rethrows -> T {
         if DispatchQueue.getSpecific(key: resourceQueueKey) == resourceQueue.label {
             return try work()
         }
