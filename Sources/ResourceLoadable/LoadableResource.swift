@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import Combine
 
 /// 可被加载的资源协议
 ///
@@ -18,87 +17,55 @@ public protocol LoadableResource {
     static var category: ResourceCategory { get }
     /// 传入的额外数据类型，不需要时设为 `Void`
     associatedtype ExtraData
-    /// 返回数据类型，需实现 `Decodable`
-    associatedtype Response: Decodable
+    /// 返回数据类型，需实现 `Sendable`
+    associatedtype Response: Sendable
 
     /// 打开资源并持续监听数据更新
     ///
     /// - Parameter extraData: 传入的额外参数
-    /// - Returns: 持续推送数据的 Publisher
-    func open(with extraData: ExtraData) -> AnyPublisher<Response, Error>
+    /// - Returns: 持续推送数据的异步流
+    /// - Throws: 加载失败时抛出错误
+    func open(with extraData: ExtraData) async throws -> AsyncStream<Response>
 }
 
 extension LoadableResource {
     /// 打开资源并持续监听，默认通过 `ResourceCenter` 路由到对应 `ResourceLoader`
     ///
     /// - Parameter extraData: 传入的额外参数
-    /// - Returns: 持续推送数据的 Publisher
-    public func open(with extraData: ExtraData) -> AnyPublisher<Response, Error> {
-        ResourceCenter.shared.load(self, with: extraData)
+    /// - Returns: 持续推送数据的异步流
+    public func open(with extraData: ExtraData) async throws -> AsyncStream<Response> {
+        try await ResourceCenter.shared.load(self, with: extraData)
     }
 
-    /// 打开资源并只获取第一个值，以 `Future` 形式返回
+    /// 打开资源并只获取第一个值
+    ///
+    /// 从 `open(with:)` 返回的 AsyncStream 中读取第一个值即返回。
+    /// 若流在未推送任何值的情况下结束，则抛出 `LoadResourceError.noValueReceiveWhenCompletion`。
     ///
     /// - Parameter extraData: 传入的额外参数
-    /// - Returns: 只返回一次结果的 Future
-    public func openOnce(_ extraData: ExtraData) -> Future<Response, Error> {
-        open(with: extraData).asFuture()
-    }
-
-    /// 打开资源并只获取第一个值，以回调形式返回
-    ///
-    /// - Parameters:
-    ///   - extraData: 传入的额外参数
-    ///   - callback: 结果回调
-    public func openOnce(_ extraData: ExtraData, callback: @escaping @Sendable (Result<Response, Error>) -> Void) {
-        open(with: extraData).receiveOnce(with: callback)
+    /// - Returns: 解码后的响应数据
+    /// - Throws: 加载失败时抛出错误
+    public func openOnce(with extraData: ExtraData) async throws -> Response {
+        for try await value in try await open(with: extraData) {
+            return value
+        }
+        throw LoadResourceError.noValueReceiveWhenCompletion
     }
 }
 
 extension LoadableResource where ExtraData == Void {
     /// 打开资源并持续监听（无额外参数版本）
     ///
-    /// - Returns: 持续推送数据的 Publisher
-    public func open() -> AnyPublisher<Response, Error> {
-        open(with: Void())
+    /// - Returns: 持续推送数据的异步流
+    public func open() async throws -> AsyncStream<Response> {
+        try await open(with: ())
     }
 
     /// 打开资源并只获取第一个值（无额外参数版本）
     ///
-    /// - Returns: 只返回一次结果的 Future
-    public func openOnce() -> Future<Response, Error> {
-        openOnce(Void())
-    }
-
-    /// 打开资源并只获取第一个值，以回调形式返回（无额外参数版本）
-    ///
-    /// - Parameter callback: 结果回调
-    public func openOnce(callback: @escaping @Sendable (Result<Response, Error>) -> Void) {
-        openOnce(Void(), callback: callback)
-    }
-}
-
-extension LoadableResource where Response: Sendable {
-    /// 打开资源并只获取第一个值（async/await 版本）
-    ///
-    /// - Parameter extraData: 传入的额外参数
-    /// - Returns: 解码后的响应数据
-    /// - Throws: 加载失败时抛出错误
-    public func openOnce(_ extraData: ExtraData) async throws -> Response {
-        try await withCheckedThrowingContinuation { continuation in
-            self.openOnce(extraData) { @Sendable result in
-                continuation.resume(with: result)
-            }
-        }
-    }
-}
-
-extension LoadableResource where ExtraData == Void, Response: Sendable {
-    /// 打开资源并只获取第一个值（无额外参数 async/await 版本）
-    ///
     /// - Returns: 解码后的响应数据
     /// - Throws: 加载失败时抛出错误
     public func openOnce() async throws -> Response {
-        try await self.openOnce(Void())
+        try await openOnce(with: ())
     }
 }

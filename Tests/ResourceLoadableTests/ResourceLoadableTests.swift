@@ -7,10 +7,15 @@
 //
 
 import Testing
-import Combine
 @testable import ResourceLoadable
 
 // MARK: - 测试辅助
+
+/// 用于在 @Sendable 回调中安全捕获结果的包装类
+final class Box<T>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
+}
 
 /// ResourceMonitor 观察者，强持有以防止弱引用提前释放
 private final class TestObserver: @unchecked Sendable, ResourceMonitorObserver {
@@ -39,7 +44,7 @@ private func resetResourceCenter(loader: (any ResourceLoader)? = nil) {
 struct ResourceLoadableTests {
 
     @Test("open() 持续接收值")
-    func testOpenResource() {
+    func testOpenResource() async throws {
         resetResourceCenter()
         let fileHandler = FileResourceLoader()
         ResourceCenter.shared.registerLoader(fileHandler)
@@ -48,32 +53,18 @@ struct ResourceLoadableTests {
         let fileResource = FileResource(fileName: fileName)
 
         var arrReceives = [String]()
-        var isCompletion = false
-        let cancellable = fileResource.open().sink { _ in
-            isCompletion = true
-        } receiveValue: { str in
-            arrReceives.append(str)
+        let stream = try await fileResource.open()
+        
+        for try await value in stream {
+            arrReceives.append(value)
         }
 
-        #expect(!isCompletion)
         #expect(arrReceives.count == 1)
         #expect(arrReceives[0] == fileName)
-
-        let newTest = "newText"
-        fileHandler.publisher.send(newTest)
-        #expect(!isCompletion)
-        #expect(arrReceives.count == 2)
-        #expect(arrReceives[0] == fileName)
-        #expect(arrReceives[1] == newTest)
-
-        fileHandler.publisher.send(completion: .finished)
-        #expect(isCompletion)
-
-        cancellable.cancel()
     }
 
-    @Test("openOnce(callback:) 只返回第一个值")
-    func testOpenResourceOnce() {
+    @Test("openOnce() 只返回第一个值")
+    func testOpenResourceOnce() async throws {
         resetResourceCenter()
         let fileHandler = FileResourceLoader()
         ResourceCenter.shared.registerLoader(fileHandler)
@@ -81,77 +72,12 @@ struct ResourceLoadableTests {
         let fileName = "test"
         let fileResource = FileResource(fileName: fileName)
 
-        let box = Box<String>("")
-        let doneBox = Box(false)
-        fileResource.openOnce { result in
-            if case .success(let str) = result {
-                box.value = str
-            }
-            doneBox.value = true
-        }
-
-        #expect(doneBox.value)
-        #expect(box.value == fileName)
-    }
-
-    @Test("openOnce() Future 形式只返回第一个值")
-    func testOpenResourceOnceWithFuture() {
-        resetResourceCenter()
-        let fileHandler = FileResourceLoader()
-        ResourceCenter.shared.registerLoader(fileHandler)
-
-        let fileName = "test"
-        let fileResource = FileResource(fileName: fileName)
-
-        var response = ""
-        var isCompletion = false
-        let cancellable = fileResource.openOnce().sink { completion in
-            if case .failure(_) = completion {
-                Issue.record("completion with error")
-            }
-            isCompletion = true
-        } receiveValue: { data in
-            response = data
-        }
-
-        #expect(isCompletion)
-        #expect(response == fileName)
-        cancellable.cancel()
-    }
-
-    @Test("Publisher 完成未发值时返回 noValueReceiveWhenCompletion")
-    func testNoResponseWhenOpenResourceOnce() {
-        resetResourceCenter()
-        let fileHandler = FilePassthroughLoader()
-        ResourceCenter.shared.registerLoader(fileHandler)
-
-        let fileName = "test"
-        let fileResource = FileResource(fileName: fileName)
-
-        let responseBox = Box<String?>(nil)
-        let errorBox = Box<Error?>(nil)
-        let doneBox = Box(false)
-        fileResource.openOnce { result in
-            switch result {
-            case .success(let str): responseBox.value = str
-            case .failure(let error): errorBox.value = error
-            }
-            doneBox.value = true
-        }
-
-        #expect(!doneBox.value)
-        #expect(responseBox.value == nil)
-
-        fileHandler.publisher.send(completion: .finished)
-        #expect(doneBox.value)
-        if case .noValueReceiveWhenCompletion = errorBox.value as? LoadResourceError {} else {
-            Issue.record("no error response")
-        }
-        #expect(responseBox.value == nil)
+        let result = try await fileResource.openOnce()
+        #expect(result == fileName)
     }
 
     @Test("无加载器时触发 noLoaderFoundForResource 并返回错误")
-    func testErrorNoHandlerWhenOpenResourceOnce() {
+    func testErrorNoHandlerWhenOpenResourceOnce() async throws {
         resetResourceCenter()
 
         let observer = TestObserver()
@@ -161,24 +87,18 @@ struct ResourceLoadableTests {
         let fileName = "test"
         let fileResource = FileResource(fileName: fileName)
 
-        let responseBox = Box<String?>(nil)
-        let errorBox = Box<Error?>(nil)
-        let doneBox = Box(false)
-        fileResource.openOnce { result in
-            switch result {
-            case .success(let str): responseBox.value = str
-            case .failure(let error): errorBox.value = error
+        do {
+            _ = try await fileResource.openOnce()
+            Issue.record("Expected noLoaderForResource error")
+        } catch let error as LoadResourceError {
+            if case .noLoaderForResource = error {
+                #expect(observer.noLoaderCount == 1)
+            } else {
+                Issue.record("Wrong error type: \(error)")
             }
-            doneBox.value = true
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
-
-        #expect(doneBox.value)
-        #expect(responseBox.value == nil)
-        #expect(observer.noLoaderCount == 1)
-        if case .noLoaderForResource = errorBox.value as? LoadResourceError {} else {
-            Issue.record("no error response")
-        }
-        #expect(responseBox.value == nil)
     }
 
     @Test("重复注册同一类别触发 duplicateRegistration")
@@ -195,18 +115,5 @@ struct ResourceLoadableTests {
 
         ResourceCenter.shared.registerLoader(fileHandler)
         #expect(observer.duplicateCount == 1)
-    }
-
-    @Test("openOnce() async/await 版本")
-    func testOpenResourceOnceAsync() async throws {
-        resetResourceCenter()
-        let fileHandler = FileResourceLoader()
-        ResourceCenter.shared.registerLoader(fileHandler)
-
-        let fileName = "test"
-        let fileResource = FileResource(fileName: fileName)
-
-        let result = try await fileResource.openOnce()
-        #expect(result == fileName)
     }
 }

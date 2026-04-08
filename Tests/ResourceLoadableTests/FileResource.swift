@@ -6,7 +6,6 @@
 //  Copyright © 2022 Miejoy. All rights reserved.
 //
 
-import Combine
 @testable import ResourceLoadable
 
 protocol LoadableFileResource: LoadableResource where ExtraData == Void {
@@ -24,29 +23,51 @@ struct FileResource: LoadableFileResource {
 
 final class FileResourceLoader: @unchecked Sendable, ResourceLoader {
     static let categories: Set<ResourceCategory> = [.file]
-    let publisher = CurrentValueSubject<String, Error>("")
+    
+    var lastValue: String = ""
+    var shouldFail: Bool = false
+    var failureError: Error?
 
     func load<Resource: LoadableResource>(
         _ resource: Resource,
         with extraData: Resource.ExtraData
-    ) -> AnyPublisher<Resource.Response, Error> {
-        let typed = publisher as! CurrentValueSubject<Resource.Response, Error>
-        if let fileRes = resource as? FileResource {
-            publisher.send(fileRes.fileName)
+    ) async throws -> AsyncStream<Resource.Response> {
+        if shouldFail, let error = failureError {
+            throw error
         }
-        return typed.eraseToAnyPublisher()
+        
+        if let fileRes = resource as? FileResource {
+            lastValue = fileRes.fileName
+        }
+        
+        return AsyncStream { continuation in
+            let typedValue = lastValue as! Resource.Response
+            continuation.yield(typedValue)
+            continuation.finish()
+        }
     }
 }
 
 final class FilePassthroughLoader: @unchecked Sendable, ResourceLoader {
     static let categories: Set<ResourceCategory> = [.file]
-    let publisher = PassthroughSubject<String, Error>()
+    
+    nonisolated(unsafe) var continuation: AsyncStream<String>.Continuation?
 
     func load<Resource: LoadableResource>(
         _ resource: Resource,
         with extraData: Resource.ExtraData
-    ) -> AnyPublisher<Resource.Response, Error> {
-        let typed = publisher as! PassthroughSubject<Resource.Response, Error>
-        return typed.eraseToAnyPublisher()
+    ) async throws -> AsyncStream<Resource.Response> {
+        return AsyncStream { [weak self] continuation in
+            // 存储 continuation 以便外部可以调用 send/finish
+            self?.continuation = continuation
+        } as! AsyncStream<Resource.Response>
+    }
+    
+    func send(_ value: String) {
+        continuation?.yield(value)
+    }
+    
+    func finish() {
+        continuation?.finish()
     }
 }

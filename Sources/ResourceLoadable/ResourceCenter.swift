@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import Combine
 
 /// 资源中心
 ///
@@ -55,15 +54,16 @@ public final class ResourceCenter: Sendable {
     }
 
     /// 加载资源（内部方法，由 `LoadableResource.open(with:)` 调用）
-    func load<Resource: LoadableResource>(_ resource: Resource, with extraData: Resource.ExtraData) -> AnyPublisher<Resource.Response, Error> {
+    func load<Resource: LoadableResource>(
+        _ resource: Resource,
+        with extraData: Resource.ExtraData
+    ) async throws -> AsyncStream<Resource.Response> {
         let loader = DispatchQueue.syncOnResourceQueue { storage.loaderMap[Resource.category] }
-        if let loader {
-            return loader.load(resource, with: extraData)
+        guard let loader else {
+            ResourceMonitor.shared.record(event: .noLoaderFoundForResource(Resource.category))
+            throw LoadResourceError.noLoaderForResource(Resource.category)
         }
-        ResourceMonitor.shared.record(event: .noLoaderFoundForResource(Resource.category))
-        let publisher = PassthroughSubject<Resource.Response, Error>()
-        publisher.send(completion: .failure(LoadResourceError.noLoaderForResource(Resource.category)))
-        return publisher.eraseToAnyPublisher()
+        return try await loader.load(resource, with: extraData)
     }
 }
 
@@ -92,7 +92,7 @@ extension DispatchQueue {
 public enum LoadResourceError: Error, Sendable {
     /// 找不到对应类别的加载器
     case noLoaderForResource(ResourceCategory)
-    /// Publisher 完成时未收到任何值
+    /// 流结束时未收到任何值
     case noValueReceiveWhenCompletion
     /// 资源类型不匹配
     case resourceTypeError

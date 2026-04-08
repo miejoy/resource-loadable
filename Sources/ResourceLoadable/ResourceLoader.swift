@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import Combine
 
 /// 资源加载器协议
 ///
@@ -22,9 +21,10 @@ public protocol ResourceLoader: AnyObject, Sendable {
     /// - Parameters:
     ///   - resource: 待加载的资源
     ///   - extraData: 资源的额外参数
-    /// - Returns: 推送资源数据的 Publisher
+    /// - Returns: 推送资源数据的异步流
+    /// - Throws: 加载失败时抛出错误
     func load<Resource: LoadableResource>(
         _ resource: Resource,
         with extraData: Resource.ExtraData
-    ) -> AnyPublisher<Resource.Response, Error>
+    ) async throws -> AsyncStream<Resource.Response>
 }
