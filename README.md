@@ -24,7 +24,6 @@ ResourceLoadable 是自定义 RSV（Resource & State & View）设计模式中 Re
 - **ResourceCenter**：资源中心单例，管理加载器注册并将资源路由到对应加载器
 - **ResourceCategory**：资源类别枚举（file、web、custom 等）
 - **ResourceMonitor**：资源事件监听器，用于观察注册、错误等事件
-- **Combine+Utils**：Publisher 扩展工具（`asFuture`、`receiveOnce`、`watch`、`wait`）
 
 ## 安装
 
@@ -65,22 +64,22 @@ struct FileResource: LoadableFileResource {
 
 ```swift
 import ResourceLoadable
-import Combine
 
-class FileResourceLoader: ResourceLoader {
+final class FileResourceLoader: ResourceLoader {
     static let categories: Set<ResourceCategory> = [.file]
 
     func load<Resource: LoadableResource>(
         _ resource: Resource,
         with extraData: Resource.ExtraData
-    ) -> AnyPublisher<Resource.Response, Error> {
-        guard let fileRes = resource as? LoadableFileResource else {
-            return Fail(error: LoadResourceError.resourceTypeError).eraseToAnyPublisher()
+    ) async throws -> AsyncStream<Resource.Response> {
+        guard let fileRes = resource as? any LoadableFileResource else {
+            throw LoadResourceError.resourceTypeError
         }
         // 实际读取文件逻辑...
-        return Just(fileRes.fileName)
-            .setFailureType(to: Error.self)
-            .eraseToAnyPublisher()
+        return AsyncStream { continuation in
+            continuation.yield(fileRes.fileName as! Resource.Response)
+            continuation.finish()
+        }
     }
 }
 
@@ -96,49 +95,17 @@ import ResourceLoadable
 
 let resource = FileResource(fileName: "config.json")
 
-// 持续监听（Combine）
-let cancellable = resource.open().sink { completion in
-    // 处理完成事件
-} receiveValue: { content in
+// 持续监听（AsyncStream）
+let stream = try await resource.open()
+for try await content in stream {
     print("收到内容：\(content)")
-}
-
-// 只获取一次（回调）
-resource.openOnce { result in
-    switch result {
-    case .success(let content): print(content)
-    case .failure(let error): print(error)
-    }
 }
 
 // 只获取一次（async/await）
 let content = try await resource.openOnce()
 ```
 
-### 4. Combine 工具方法
-
-```swift
-import ResourceLoadable
-import Combine
-
-// asFuture：将任意 Publisher 转为只返回一次的 Future
-let future = somePublisher.asFuture()
-
-// receiveOnce：订阅并只接收第一个值
-somePublisher.receiveOnce { result in
-    // 处理结果
-}
-
-// watch：在不中断数据流的情况下观察每个值
-let cancellable = somePublisher
-    .watch { value in print("观察到：\(value)") }
-    .sink { _ in } receiveValue: { _ in }
-
-// wait：等待 Future 的结果（async/await）
-let value = try await someFuture.wait()
-```
-
-### 5. 监听资源事件
+### 4. 监听资源事件
 
 ```swift
 import ResourceLoadable
@@ -156,6 +123,8 @@ class MyObserver: ResourceMonitorObserver {
             print("找不到加载器：\(category)")
         case .duplicateRegistration(_, let new):
             print("重复注册：\(new)")
+        case .fatalError(let msg):
+            print("致命错误：\(msg)")
         }
     }
 }
